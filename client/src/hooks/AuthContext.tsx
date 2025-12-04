@@ -96,13 +96,18 @@ const AuthContextProvider = ({
       // Check for returnTo query parameter to support mini popup routing
       const urlParams = new URLSearchParams(window.location.search);
       let returnTo = urlParams.get('returnTo');
+      console.log('[AuthContext] Checking returnTo from URL:', returnTo);
 
       // Fallback to sessionStorage for iframe context where query params may be lost
       if (!returnTo) {
-        returnTo = sessionStorage.getItem('mini_returnTo');
+        const storedValue = sessionStorage.getItem('mini_returnTo');
+        console.log('[AuthContext] Checking sessionStorage mini_returnTo:', storedValue);
+        returnTo = storedValue;
         if (returnTo) {
           console.log('[AuthContext] Retrieved returnTo from sessionStorage:', returnTo);
           sessionStorage.removeItem('mini_returnTo'); // Clean up
+        } else {
+          console.log('[AuthContext] SessionStorage is empty, no returnTo found');
         }
       }
 

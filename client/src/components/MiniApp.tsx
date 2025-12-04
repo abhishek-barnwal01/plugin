@@ -48,7 +48,13 @@ export default function MiniApp() {
 
   const isTemporaryChat = conversation && conversation.expiredAt ? true : false;
 
-  console.log('miniapploaded', { conversationId, effectiveConversationId, isAuthenticated, conversation });
+  console.log('miniapploaded', {
+    conversationId,
+    effectiveConversationId,
+    isAuthenticated,
+    isAuthenticatedType: typeof isAuthenticated,
+    conversation
+  });
 
   // Auto-redirect /mini to /mini/new if no conversationId in URL
   useEffect(() => {
@@ -146,6 +152,13 @@ export default function MiniApp() {
   // Redirect to login if not authenticated, with return path
   // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
+    console.log('[MiniApp] Auth check effect running:', {
+      isAuthenticated,
+      isAuthenticatedType: typeof isAuthenticated,
+      isAuthenticatedNotUndefined: isAuthenticated !== undefined,
+      willRedirect: !isAuthenticated && isAuthenticated !== undefined
+    });
+
     if (!isAuthenticated && isAuthenticated !== undefined) {
       console.log('Not authenticated, redirecting to login with return path');
       // Store the current path or default to /mini/new
@@ -154,6 +167,7 @@ export default function MiniApp() {
       // Store returnTo in sessionStorage as backup for iframe context where query params may be lost
       sessionStorage.setItem('mini_returnTo', returnPath);
       console.log('[MiniApp] Stored returnTo in sessionStorage:', returnPath);
+      console.log('[MiniApp] Verifying storage:', sessionStorage.getItem('mini_returnTo'));
 
       navigate(`/login?returnTo=${encodeURIComponent(returnPath)}`, { replace: true });
     }
