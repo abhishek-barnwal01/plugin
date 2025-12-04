@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet, useLocation } from 'react-router-dom';
 import type { ContextType } from '~/common';
 import {
   useSearchEnabled,
@@ -22,6 +22,9 @@ import { useHealthCheck } from '~/data-provider';
 import { Banner } from '~/components/Banners';
 
 export default function Root() {
+  const location = useLocation();
+  const isMiniMode = location.pathname.startsWith('/mini');
+
   const [showTerms, setShowTerms] = useState(false);
   const [bannerHeight, setBannerHeight] = useState(0);
   const [navVisible, setNavVisible] = useState(() => {
@@ -70,30 +73,35 @@ export default function Root() {
         <AssistantsMapContext.Provider value={assistantsMap}>
           <AgentsMapContext.Provider value={agentsMap}>
             <PromptGroupsProvider>
-              <Banner onHeightChange={setBannerHeight} />
+              {!isMiniMode && <Banner onHeightChange={setBannerHeight} />}
+              {!isMiniMode && (
+                <div
+                  style={{
+                    marginTop: '0px',
+                    backgroundColor: '#171C8F',
+                    height: '50px',
+                    width: '100%',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    padding: '0 10px',
+                  }}
+                >
+                  <img
+                    src="/assets/Maruti Suzuki (White).png"
+                    alt="Left"
+                    style={{ height: '25px', width: '200px', marginLeft: '10px' }}
+                  />
+                </div>
+              )}
               <div
-                style={{
-                  marginTop: '0px',
-                  backgroundColor: '#171C8F',
-                  height: '50px',
-                  width: '100%',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  padding: '0 10px',
-                }}
+                className="flex"
+                style={{ height: isMiniMode ? '100dvh' : `calc(100dvh - ${bannerHeight}px)` }}
               >
-                <img
-                  src="/assets/Maruti Suzuki (White).png"
-                  alt="Left"
-                  style={{ height: '25px', width: '200px', marginLeft: '10px' }}
-                />
-              </div>
-              <div className="flex" style={{ height: `calc(100dvh - ${bannerHeight}px)` }}>
                 <div className="relative z-0 flex h-full w-full overflow-hidden">
-                  <Nav navVisible={navVisible} setNavVisible={setNavVisible} />
+                  {!isMiniMode && <Nav navVisible={navVisible} setNavVisible={setNavVisible} />}
                   <div className="relative flex h-full max-w-full flex-1 flex-col overflow-hidden">
-                    <MobileNav setNavVisible={setNavVisible} />
+                    {!isMiniMode && <MobileNav setNavVisible={setNavVisible} />}
                     <Outlet context={{ navVisible, setNavVisible } satisfies ContextType} />
                   </div>
                 </div>
