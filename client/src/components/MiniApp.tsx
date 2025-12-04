@@ -56,6 +56,16 @@ export default function MiniApp() {
     conversation
   });
 
+  // Always keep returnTo in sessionStorage for mini mode to survive token refresh issues
+  useEffect(() => {
+    const currentPath = effectiveConversationId ? `/mini/${effectiveConversationId}` : '/mini/new';
+    const stored = sessionStorage.getItem('mini_returnTo');
+    if (stored !== currentPath) {
+      sessionStorage.setItem('mini_returnTo', currentPath);
+      console.log('[MiniApp] Updated mini_returnTo in sessionStorage:', currentPath);
+    }
+  }, [effectiveConversationId]);
+
   // Auto-redirect /mini to /mini/new if no conversationId in URL
   useEffect(() => {
     if (!conversationId) {
