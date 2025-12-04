@@ -150,6 +150,11 @@ export default function MiniApp() {
       console.log('Not authenticated, redirecting to login with return path');
       // Store the current path or default to /mini/new
       const returnPath = effectiveConversationId ? `/mini/${effectiveConversationId}` : '/mini/new';
+
+      // Store returnTo in sessionStorage as backup for iframe context where query params may be lost
+      sessionStorage.setItem('mini_returnTo', returnPath);
+      console.log('[MiniApp] Stored returnTo in sessionStorage:', returnPath);
+
       navigate(`/login?returnTo=${encodeURIComponent(returnPath)}`, { replace: true });
     }
   }, [isAuthenticated, navigate, effectiveConversationId]);

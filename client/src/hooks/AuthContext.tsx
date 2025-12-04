@@ -95,13 +95,24 @@ const AuthContextProvider = ({
 
       // Check for returnTo query parameter to support mini popup routing
       const urlParams = new URLSearchParams(window.location.search);
-      const returnTo = urlParams.get('returnTo');
+      let returnTo = urlParams.get('returnTo');
+
+      // Fallback to sessionStorage for iframe context where query params may be lost
+      if (!returnTo) {
+        returnTo = sessionStorage.getItem('mini_returnTo');
+        if (returnTo) {
+          console.log('[AuthContext] Retrieved returnTo from sessionStorage:', returnTo);
+          sessionStorage.removeItem('mini_returnTo'); // Clean up
+        }
+      }
+
       const redirectPath = returnTo || '/c/new';
 
       console.log('[AuthContext] Login success, redirect info:', {
         windowLocationSearch: window.location.search,
         returnTo,
-        redirectPath
+        redirectPath,
+        source: returnTo ? (urlParams.get('returnTo') ? 'url' : 'sessionStorage') : 'default'
       });
 
       setUserContext({ token, isAuthenticated: true, user, redirect: redirectPath });
