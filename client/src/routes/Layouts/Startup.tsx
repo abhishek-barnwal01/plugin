@@ -29,8 +29,8 @@ export default function StartupLayout({ isAuthenticated }: { isAuthenticated?: b
   const location = useLocation();
 
   useEffect(() => {
-    if (isAuthenticated) {
-      // Check for returnTo parameter to support mini popup routing
+    if (isAuthenticated && location.pathname.startsWith('/login')) {
+      // Only redirect from login page - check for returnTo parameter to support mini popup routing
       const urlParams = new URLSearchParams(window.location.search);
       const returnTo = urlParams.get('returnTo');
       const redirectPath = returnTo || '/c/new';
@@ -39,7 +39,7 @@ export default function StartupLayout({ isAuthenticated }: { isAuthenticated?: b
     if (data) {
       setStartupConfig(data);
     }
-  }, [isAuthenticated, navigate, data]);
+  }, [isAuthenticated, navigate, data, location.pathname]);
 
   useEffect(() => {
     document.title = startupConfig?.appTitle || 'ConvoBot';
