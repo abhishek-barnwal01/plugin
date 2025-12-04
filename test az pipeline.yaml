@@ -1,0 +1,497 @@
+trigger: none
+
+parameters:
+- name: skipSonarQube
+  displayName: 'Skip SonarQube Scan'
+  type: boolean
+  default: false
+- name: skipMend
+  displayName: 'Skip Mend/WhiteSource Scan'
+  type: boolean
+  default: false
+- name: skipTests
+  displayName: 'Skip Unit Tests'
+  type: boolean
+  default: false
+- name: skipDockerTrivy
+  displayName: 'Skip Docker Build and Trivy Scan'
+  type: boolean
+  default: false
+- name: skipOWASP
+  displayName: 'Skip OWASP Dependency-Check'
+  type: boolean
+  default: false
+- name: nvdApiKey
+  displayName: 'NVD API Key (for OWASP Dependency-Check)'
+  type: string
+  default: '795903a1-05dc-452f-a1f1-1ea77441bc70'
+
+variables:
+  SONARQUBE_PROJECT_KEY: 'msil-fixed'
+  SONARQUBE_SERVICE_CONNECTION: 'Sonarqube_ritika'
+  NODE_VERSION: '18.x'
+
+pool:
+  name: 'Azure Pipelines'
+
+stages:
+# Stage 1: Mend/WhiteSource Security Scan
+- stage: MendSecurityScan
+  displayName: "Mend/WhiteSource Security Scan"
+  condition: eq('${{ parameters.skipMend }}', false)
+  jobs:
+    - job: MendScan
+      displayName: 'Run Mend Security Scan'
+      steps:
+        - checkout: self
+          fetchDepth: 0
+
+        - task: NodeTool@0
+          displayName: 'Use Node.js $(NODE_VERSION)'
+          inputs:
+            versionSpec: '$(NODE_VERSION)'
+
+        - task: Npm@1
+          displayName: 'Install Dependencies for Mend'
+          inputs:
+            command: 'custom'
+            customCommand: 'install --force'
+            workingDir: '$(System.DefaultWorkingDirectory)'
+
+        - task: WhiteSource@21
+          displayName: 'Run Mend/WhiteSource Scan'
+          inputs:
+            cwd: '$(System.DefaultWorkingDirectory)'
+            projectName: 'msil'
+            configuration: 'npm.resolveDependencies=true'
+
+# Stage 2: Unit Tests
+- stage: UnitTestsStage
+  displayName: "Run Unit Tests with Coverage"
+  condition: eq('${{ parameters.skipTests }}', false)
+  jobs:
+    - job: RunTests
+      displayName: 'Execute Unit Tests'
+      steps:
+        - checkout: self
+          fetchDepth: 0
+
+        - task: NodeTool@0
+          displayName: 'Use Node.js $(NODE_VERSION)'
+          inputs:
+            versionSpec: '$(NODE_VERSION)'
+
+        - task: Npm@1
+          displayName: 'Install Dependencies'
+          inputs:
+            command: 'custom'
+            customCommand: 'install --force'
+            workingDir: '$(System.DefaultWorkingDirectory)'
+
+        # Run tests in packages directory
+        - script: |
+            echo "Running tests in packages directory..."
+            cd packages/data-provider && npm run test:ci
+            cd ../data-schemas && npm run test:ci
+          displayName: 'Run Tests in Packages'
+          workingDirectory: '$(System.DefaultWorkingDirectory)'
+          continueOnError: true
+          condition: succeededOrFailed()
+
+        # Publish test results to Azure DevOps
+        - task: PublishTestResults@2
+          displayName: 'Publish Test Results'
+          condition: succeededOrFailed()
+          inputs:
+            testResultsFormat: 'JUnit'
+            testResultsFiles: '**/test-results/junit.xml'
+            mergeTestResults: true
+            failTaskOnFailedTests: false
+            testRunTitle: 'Unit Tests'
+
+        # Publish code coverage results to Azure DevOps
+        - task: PublishCodeCoverageResults@2
+          displayName: 'Publish Code Coverage'
+          condition: succeededOrFailed()
+          inputs:
+            codeCoverageTool: 'Cobertura'
+            summaryFileLocation: '$(System.DefaultWorkingDirectory)/**/coverage/cobertura-coverage.xml'
+            reportDirectory: '$(System.DefaultWorkingDirectory)/**/coverage'
+            failIfCoverageEmpty: false
+
+# Stage 3: SonarQube Code Quality Scan
+- stage: SonarQubeStage
+  displayName: "SonarQube Code Quality Scan"
+  condition: eq('${{ parameters.skipSonarQube }}', false)
+  jobs:
+    - job: SonarQubeAnalysis
+      displayName: 'SonarQube Code Analysis'
+      steps:
+        - checkout: self
+          fetchDepth: 0
+
+        - task: NodeTool@0
+          displayName: 'Use Node.js $(NODE_VERSION)'
+          inputs:
+            versionSpec: '$(NODE_VERSION)'
+
+        - task: Npm@1
+          displayName: 'Install Dependencies'
+          inputs:
+            command: 'custom'
+            customCommand: 'install --force'
+            workingDir: '$(System.DefaultWorkingDirectory)'
+
+        # Run tests to generate coverage for SonarQube
+        - script: |
+            echo "Running tests to generate coverage..."
+            cd packages/data-provider && npm run test:ci
+            cd ../data-schemas && npm run test:ci
+          displayName: 'Generate Test Coverage for SonarQube'
+          workingDirectory: '$(System.DefaultWorkingDirectory)'
+          continueOnError: true
+          condition: succeededOrFailed()
+
+        - task: SonarQubePrepare@7
+          displayName: 'Prepare SonarQube Analysis'
+          inputs:
+            SonarQube: '$(SONARQUBE_SERVICE_CONNECTION)'
+            scannerMode: 'CLI'
+            configMode: 'manual'
+            cliProjectKey: '$(SONARQUBE_PROJECT_KEY)'
+            cliProjectName: '$(SONARQUBE_PROJECT_KEY)'
+            extraProperties: |
+              # Project identification
+              sonar.projectVersion=1.0
+              sonar.javascript.node.maxspace=4096
+              
+              # Source code paths - SCAN EVERYTHING
+              sonar.sources=.
+              sonar.tests=.
+              
+              # Language settings
+              sonar.language=js,ts
+              sonar.sourceEncoding=UTF-8
+              
+              # Exclusions - Exclude build artifacts, dependencies, AND Helm templates
+              sonar.exclusions=**/node_modules/**,**/dist/**,**/build/**,**/helm/**,**/.helm/**,**/charts/**,**/*.tpl,**/templates/**/*.yaml,**/templates/**/*.yml
+              
+              # Test file patterns (explicitly identify test files)
+              sonar.test.inclusions=**/*.spec.ts,**/*.spec.tsx,**/*.test.ts,**/*.test.tsx,**/*.spec.js,**/*.test.js,**/specs/**/*,**/__tests__/**/*,**/test/**/*.ts,**/test/**/*.js
+              
+              # Coverage report paths (LCOV format) - CRITICAL for coverage
+              sonar.javascript.lcov.reportPaths=coverage/lcov.info,packages/*/coverage/lcov.info,packages/data-provider/coverage/lcov.info,packages/data-schemas/coverage/lcov.info
+              sonar.typescript.lcov.reportPaths=coverage/lcov.info,packages/*/coverage/lcov.info,packages/data-provider/coverage/lcov.info,packages/data-schemas/coverage/lcov.info
+              
+              # Coverage exclusions (don't measure coverage for these, but still analyze them)
+              sonar.coverage.exclusions=**/node_modules/**,**/dist/**,**/build/**,**/*.config.js,**/*.config.ts,**/types/**,**/rollup*.js,**/babel*.js,**/jest*.js,**/helm/**
+              
+              # Duplication exclusions
+              sonar.cpd.exclusions=**/node_modules/**,**/dist/**,**/*.spec.ts,**/*.spec.tsx,**/*.test.ts,**/*.test.tsx,**/*.spec.js,**/*.test.js
+              
+              # Analysis parameters
+              sonar.verbose=false
+              sonar.log.level=INFO
+
+        - task: SonarQubeAnalyze@7
+          displayName: 'Run SonarQube Analysis'
+
+        - task: SonarQubePublish@7
+          displayName: 'Publish SonarQube Quality Gate Results'
+          inputs:
+            pollingTimeoutSec: '300'
+
+# Stage 4: Docker Build and Trivy Security Scan
+- stage: DockerSecurityScan
+  displayName: "Docker Build and Trivy Security Scan"
+  condition: eq('${{ parameters.skipDockerTrivy }}', false)
+  jobs:
+    - job: BuildAndScanImage
+      displayName: 'Build Docker Image and Run Trivy Scan'
+      steps:
+        - checkout: self
+          fetchDepth: 1
+
+        - script: |
+            echo "=========================================="
+            echo "Cleaning node_modules and package-lock.json"
+            echo "=========================================="
+            
+            # Remove all node_modules directories
+            echo "Removing node_modules directories..."
+            find . -name "node_modules" -type d -prune -exec rm -rf {} +
+            
+            # Remove package-lock.json files
+            echo "Removing package-lock.json files..."
+            find . -name "package-lock.json" -type f -delete
+            
+            echo "✓ Cleanup completed"
+            echo "=========================================="
+            
+            # Verify cleanup
+            echo "Verifying cleanup..."
+            if [ ! -d "node_modules" ] && [ ! -f "package-lock.json" ]; then
+              echo "✓ Root node_modules and package-lock.json removed"
+            fi
+            
+            # Check for any remaining node_modules
+            REMAINING=$(find . -name "node_modules" -type d 2>/dev/null | wc -l)
+            echo "Remaining node_modules directories: $REMAINING"
+            
+            # Check for any remaining package-lock.json
+            REMAINING_LOCKS=$(find . -name "package-lock.json" -type f 2>/dev/null | wc -l)
+            echo "Remaining package-lock.json files: $REMAINING_LOCKS"
+            
+            echo "=========================================="
+          displayName: 'Clean node_modules and package-lock.json'
+          workingDirectory: '$(System.DefaultWorkingDirectory)'
+
+        # Install Trivy
+        - script: |
+            echo "Installing Trivy scanner..."
+            sudo apt-get update
+            sudo apt-get install -y wget apt-transport-https gnupg lsb-release
+            wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
+            echo "deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee -a /etc/apt/sources.list.d/trivy.list
+            sudo apt-get update
+            sudo apt-get install -y trivy
+            trivy --version
+          displayName: 'Install Trivy'
+
+        # Build Docker image without cache
+        - script: |
+            echo "Building Docker image without cache..."
+            docker build --no-cache -t librechat:$(Build.BuildId) -f Dockerfile .
+            docker tag librechat:$(Build.BuildId) librechat:latest
+            echo "Docker image built successfully: librechat:$(Build.BuildId)"
+            docker images | grep librechat
+          displayName: 'Build Docker Image (No Cache)'
+          workingDirectory: '$(System.DefaultWorkingDirectory)'
+
+        # Run Trivy vulnerability scan with ALL severities (console output with table format)
+        - script: |
+            echo "Running Trivy vulnerability scan (ALL severities)..."
+            trivy image --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL --format table librechat:$(Build.BuildId)
+          displayName: 'Trivy Scan - Console Output (All Severities)'
+          continueOnError: true
+
+        # Save Trivy table format as text file artifact (ALL severities)
+        - script: |
+            echo "Saving Trivy scan table to text file (ALL severities)..."
+            mkdir -p $(Build.ArtifactStagingDirectory)/trivy-reports
+            trivy image --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL --format table librechat:$(Build.BuildId) > $(Build.ArtifactStagingDirectory)/trivy-reports/trivy-report-table-all.txt 2>&1
+          displayName: 'Trivy Scan - Save Table Format (All Severities)'
+          continueOnError: true
+
+        # Save HIGH and CRITICAL only table format
+        - script: |
+            echo "Saving Trivy scan table to text file (HIGH,CRITICAL only)..."
+            trivy image --severity LOW,HIGH,CRITICAL --format table librechat:$(Build.BuildId) > $(Build.ArtifactStagingDirectory)/trivy-reports/trivy-report-table-high-critical.txt 2>&1
+          displayName: 'Trivy Scan - Save Table Format (HIGH,CRITICAL only)'
+          continueOnError: true
+
+        # Run Trivy scan and generate HTML report (ALL severities)
+        - script: |
+            echo "Generating Trivy HTML report (ALL severities)..."
+            trivy image --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL --format template --template "@contrib/html.tpl" --output $(Build.ArtifactStagingDirectory)/trivy-reports/trivy-report.html librechat:$(Build.BuildId)
+          displayName: 'Trivy Scan - Generate HTML Report (All Severities)'
+          continueOnError: true
+
+        # Publish Trivy scan reports as pipeline artifacts
+        - task: PublishBuildArtifacts@1
+          displayName: 'Publish Trivy Scan Reports'
+          condition: always()
+          inputs:
+            PathtoPublish: '$(Build.ArtifactStagingDirectory)/trivy-reports'
+            ArtifactName: 'trivy-security-reports'
+            publishLocation: 'Container'
+
+        # Optional: Clean up Docker images after scan
+        - script: |
+            echo "Cleaning up Docker images..."
+            docker rmi librechat:$(Build.BuildId) || true
+            docker rmi librechat:latest || true
+          displayName: 'Cleanup Docker Images'
+          condition: always()
+# Stage 5: OWASP Dependency-Check
+- stage: OWASPDependencyCheck
+  displayName: "OWASP Dependency-Check"
+  condition: eq('${{ parameters.skipOWASP }}', false)
+  jobs:
+    - job: OWASPScan
+      displayName: 'Run OWASP Dependency-Check'
+      steps:
+        - checkout: self
+          fetchDepth: 1
+
+        # Cache OWASP NVD database to speed up subsequent runs
+        - task: Cache@2
+          displayName: 'Cache OWASP NVD Database'
+          inputs:
+            key: 'owasp-nvd | "$(Agent.OS)" | "v1"'
+            path: $(Pipeline.Workspace)/.owasp-cache
+            restoreKeys: |
+              owasp-nvd | "$(Agent.OS)"
+          continueOnError: true
+
+        # Check if cache was restored
+        - script: |
+            echo "Checking OWASP cache status..."
+            if [ -d "$(Pipeline.Workspace)/.owasp-cache" ]; then
+              echo "✓ Cache directory exists"
+              ls -lh $(Pipeline.Workspace)/.owasp-cache || echo "Cache directory is empty"
+            else
+              echo "✗ Cache directory does not exist - First run will download full NVD database"
+              echo "⏱️ This will take 30-40 minutes. Subsequent runs will be much faster!"
+            fi
+          displayName: 'Check Cache Status'
+          continueOnError: true
+
+        # # Force clean cache directory to avoid database corruption issues
+        # - script: |
+        #     echo "=========================================="
+        #     echo "Forcing clean OWASP cache directory..."
+        #     echo "=========================================="
+        #     if [ -d "$(Pipeline.Workspace)/.owasp-cache" ]; then
+        #       echo "Removing existing cache directory..."
+        #       rm -rf $(Pipeline.Workspace)/.owasp-cache
+        #       echo "✓ Cache directory removed"
+        #     fi
+        #     echo "Creating fresh cache directory..."
+        #     mkdir -p $(Pipeline.Workspace)/.owasp-cache
+        #     echo "✓ Fresh cache directory created"
+        #     echo "=========================================="
+        #   displayName: 'Clean OWASP Cache Directory'
+        #   continueOnError: true
+
+        # Install Java (required for Dependency-Check)
+        - task: JavaToolInstaller@0
+          displayName: 'Install Java 11'
+          inputs:
+            versionSpec: '11'
+            jdkArchitectureOption: 'x64'
+            jdkSourceOption: 'PreInstalled'
+
+        # Download and Install OWASP Dependency-Check (Latest Version)
+        - script: |
+            echo "Downloading OWASP Dependency-Check (v12.1.8)..."
+            CDL_URL="https://github.com/dependency-check/DependencyCheck/releases/download/v12.1.8/dependency-check-12.1.8-release.zip"
+            echo "Download URL: ${CDL_URL}"
+            wget -q --show-progress ${CDL_URL} -O dependency-check-12.1.8-release.zip
+            unzip -q dependency-check-12.1.8-release.zip -d $(Agent.TempDirectory)
+            chmod +x $(Agent.TempDirectory)/dependency-check/bin/dependency-check.sh
+            echo "OWASP Dependency-Check v12.1.8 installed to: $(Agent.TempDirectory)/dependency-check"
+            $(Agent.TempDirectory)/dependency-check/bin/dependency-check.sh --version
+          displayName: 'Install OWASP Dependency-Check (v12.1.8)'
+
+        # Run OWASP Dependency-Check with NVD API Key
+        - script: |
+            echo "=========================================="
+            echo "Starting OWASP Dependency-Check Scan"
+            echo "=========================================="
+            echo "⏱️ First run: 30-40 minutes (downloading NVD database)"
+            echo "⏱️ Subsequent runs: 5-10 minutes (using cached database)"
+            echo "=========================================="
+            
+            mkdir -p $(Build.ArtifactStagingDirectory)/owasp-reports
+            mkdir -p $(Pipeline.Workspace)/.owasp-cache
+            
+            # Export NVD API Key as environment variable (correct variable name with underscores)
+            export NVD_API_KEY="${{ parameters.nvdApiKey }}"
+            echo "✓ NVD API Key exported as environment variable: NVD_API_KEY"
+            echo "✓ API Key length: ${#NVD_API_KEY} characters"
+            
+        # Run OWASP Dependency-Check with NVD API Key (clean + auto-purge on corrupt DB)
+        - script: |
+            set -e
+
+            echo "=========================================="
+            echo "Starting OWASP Dependency-Check Scan"
+            echo "=========================================="
+
+            DC_BIN="$(Agent.TempDirectory)/dependency-check/bin/dependency-check.sh"
+            DATA_DIR="$(Pipeline.Workspace)/.owasp-cache"
+            OUT_DIR="$(Build.ArtifactStagingDirectory)/owasp-reports"
+            SCAN_TARGET="$(System.DefaultWorkingDirectory)"
+            PROJECT_NAME="msil-librechat"
+
+            mkdir -p "${OUT_DIR}" "${DATA_DIR}"
+
+            # Export NVD API key
+            export NVD_API_KEY="${{ parameters.nvdApiKey }}"
+            echo "✓ NVD API Key exported"
+
+            # First scan attempt
+            if ! "${DC_BIN}" \
+              --scan "${SCAN_TARGET}" \
+              --out "${OUT_DIR}" \
+              --format "ALL" \
+              --project "${PROJECT_NAME}" \
+              --data "${DATA_DIR}" \
+              --enableExperimental \
+              --exclude "**/node_modules/**" \
+              --exclude "**/dist/**" \
+              --exclude "**/build/**" \
+              --exclude "**/.git/**" \
+              --exclude "**/test/**" \
+              --exclude "**/*.min.js" \
+              --failOnCVSS 0 \
+              --prettyPrint; then
+
+              echo "⚠️ Detected dependency-check failure. Purging and retrying once..."
+
+              # Purge & update database
+              "${DC_BIN}" --purge --data "${DATA_DIR}" || true
+              "${DC_BIN}" --updateonly --data "${DATA_DIR}" || true
+
+              # Retry scan once
+              "${DC_BIN}" \
+                --scan "${SCAN_TARGET}" \
+                --out "${OUT_DIR}" \
+                --format "ALL" \
+                --project "${PROJECT_NAME}" \
+                --data "${DATA_DIR}" \
+                --enableExperimental \
+                --exclude "**/node_modules/**" \
+                --exclude "**/dist/**" \
+                --exclude "**/build/**" \
+                --exclude "**/.git/**" \
+                --exclude "**/test/**" \
+                --exclude "**/*.min.js" \
+                --failOnCVSS 0 \
+                --prettyPrint || echo "⚠️ Retry also failed, continuing pipeline."
+            fi
+
+            echo "=========================================="
+            echo "OWASP Dependency-Check completed (reports available)"
+            echo "=========================================="
+          displayName: 'Run OWASP Dependency-Check Scan (auto-purge on failure)'
+          continueOnError: true
+          timeoutInMinutes: 120
+
+        # Display summary in console
+        - script: |
+            echo "=========================================="
+            echo "OWASP Dependency-Check Scan Summary"
+            echo "=========================================="
+            if [ -f "$(Build.ArtifactStagingDirectory)/owasp-reports/dependency-check-report.html" ]; then
+              echo "✓ HTML Report generated"
+            fi
+            if [ -f "$(Build.ArtifactStagingDirectory)/owasp-reports/dependency-check-report.json" ]; then
+              echo "✓ JSON Report generated"
+            fi
+            if [ -f "$(Build.ArtifactStagingDirectory)/owasp-reports/dependency-check-report.xml" ]; then
+              echo "✓ XML Report generated"
+            fi
+            echo "=========================================="
+          displayName: 'Display OWASP Scan Summary'
+          condition: always()
+
+        # Publish OWASP Dependency-Check reports
+        - task: PublishBuildArtifacts@1
+          displayName: 'Publish OWASP Reports'
+          condition: always()
+          inputs:
+            PathtoPublish: '$(Build.ArtifactStagingDirectory)/owasp-reports'
+            ArtifactName: 'owasp-dependency-check-reports'
+            publishLocation: 'Container'

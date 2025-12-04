@@ -1,0 +1,180 @@
+import { useEffect } from 'react';
+import { Spinner } from '@librechat/client';
+import { useParams, useNavigate } from 'react-router-dom';
+import { Constants, EModelEndpoint } from 'librechat-data-provider';
+import { useGetModelsQuery } from 'librechat-data-provider/react-query';
+import type { TPreset } from 'librechat-data-provider';
+import { useGetConvoIdQuery, useGetStartupConfig, useGetEndpointsQuery } from '~/data-provider';
+import { useNewConvo, useAppStartup, useAssistantListMap, useIdChangeEffect } from '~/hooks';
+import { getDefaultModelSpec, getModelSpecPreset, logger } from '~/utils';
+import { ToolCallsMapProvider } from '~/Providers';
+import ChatMiniView from '~/components/Chat/ChatMiniView';
+import useAuthRedirect from '~/routes/useAuthRedirect';
+import temporaryStore from '~/store/temporary';
+import { useRecoilCallback } from 'recoil';
+import store from '~/store';
+
+export default function MiniApp() {
+  const navigate = useNavigate();
+  const { data: startupConfig } = useGetStartupConfig();
+  const { isAuthenticated, user } = useAuthRedirect();
+
+  const setIsTemporary = useRecoilCallback(
+    ({ set }) =>
+      (value: boolean) => {
+        set(temporaryStore.isTemporary, value);
+      },
+    [],
+  );
+  useAppStartup({ startupConfig, user });
+
+  const index = 0;
+  const { conversationId = Constants.NEW_CONVO } = useParams(); // Default to NEW_CONVO
+  useIdChangeEffect(conversationId);
+  const { hasSetConversation, conversation } = store.useCreateConversationAtom(index);
+  const { newConversation } = useNewConvo();
+
+  const modelsQuery = useGetModelsQuery({
+    enabled: isAuthenticated,
+    refetchOnMount: 'always',
+  });
+  const initialConvoQuery = useGetConvoIdQuery(conversationId, {
+    enabled:
+      isAuthenticated && conversationId !== Constants.NEW_CONVO && !hasSetConversation.current,
+  });
+  const endpointsQuery = useGetEndpointsQuery({ enabled: isAuthenticated });
+  const assistantListMap = useAssistantListMap();
+
+  const isTemporaryChat = conversation && conversation.expiredAt ? true : false;
+
+  console.log('miniapploaded', { conversationId, isAuthenticated, conversation });
+
+  // Auto-redirect /mini to /mini/new if no conversationId
+  useEffect(() => {
+    if (!conversationId || conversationId === '') {
+      console.log('No conversationId, redirecting to /mini/new');
+      navigate('/mini/new', { replace: true });
+    }
+  }, [conversationId, navigate]);
+
+  useEffect(() => {
+    if (conversationId !== Constants.NEW_CONVO && !isTemporaryChat) {
+      setIsTemporary(false);
+    } else if (isTemporaryChat) {
+      setIsTemporary(isTemporaryChat);
+    }
+  }, [conversationId, isTemporaryChat, setIsTemporary]);
+
+  /** This effect is mainly for the first conversation state change on first load of the page.
+   *  Adjusting this may have unintended consequences on the conversation state.
+   */
+  useEffect(() => {
+    const shouldSetConvo =
+      (startupConfig && !hasSetConversation.current && !modelsQuery.data?.initial) ?? false;
+    /* Early exit if startupConfig is not loaded and conversation is already set */
+    if (!shouldSetConvo) {
+      return;
+    }
+
+    if (conversationId === Constants.NEW_CONVO && endpointsQuery.data && modelsQuery.data) {
+      const result = getDefaultModelSpec(startupConfig);
+      const spec = result?.default ?? result?.last;
+      logger.log('conversation', 'ChatRoute, new convo effect', conversation);
+      newConversation({
+        modelsData: modelsQuery.data,
+        template: conversation ? conversation : undefined,
+        ...(spec ? { preset: getModelSpecPreset(spec) } : {}),
+      });
+
+      hasSetConversation.current = true;
+    } else if (initialConvoQuery.data && endpointsQuery.data && modelsQuery.data) {
+      logger.log('conversation', 'ChatRoute initialConvoQuery', initialConvoQuery.data);
+      newConversation({
+        template: initialConvoQuery.data,
+        /* this is necessary to load all existing settings */
+        preset: initialConvoQuery.data as TPreset,
+        modelsData: modelsQuery.data,
+        keepLatestMessage: true,
+      });
+      hasSetConversation.current = true;
+    } else if (
+      conversationId === Constants.NEW_CONVO &&
+      assistantListMap[EModelEndpoint.assistants] &&
+      assistantListMap[EModelEndpoint.azureAssistants]
+    ) {
+      const result = getDefaultModelSpec(startupConfig);
+      const spec = result?.default ?? result?.last;
+      logger.log('conversation', 'ChatRoute new convo, assistants effect', conversation);
+      newConversation({
+        modelsData: modelsQuery.data,
+        template: conversation ? conversation : undefined,
+        ...(spec ? { preset: getModelSpecPreset(spec) } : {}),
+      });
+      hasSetConversation.current = true;
+    } else if (
+      assistantListMap[EModelEndpoint.assistants] &&
+      assistantListMap[EModelEndpoint.azureAssistants]
+    ) {
+      logger.log('conversation', 'ChatRoute convo, assistants effect', initialConvoQuery.data);
+      newConversation({
+        template: initialConvoQuery.data,
+        preset: initialConvoQuery.data as TPreset,
+        modelsData: modelsQuery.data,
+        keepLatestMessage: true,
+      });
+      hasSetConversation.current = true;
+    }
+    /* Creates infinite render if all dependencies included due to newConversation invocations exceeding call stack before hasSetConversation.current becomes truthy */
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    startupConfig,
+    initialConvoQuery.data,
+    endpointsQuery.data,
+    modelsQuery.data,
+    assistantListMap,
+  ]);
+
+  if (endpointsQuery.isLoading || modelsQuery.isLoading) {
+    return (
+      <div className="flex h-screen items-center justify-center" aria-live="polite" role="status">
+        <Spinner className="text-text-primary" />
+      </div>
+    );
+  }
+
+  // Redirect to login if not authenticated, with return path
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  useEffect(() => {
+    if (!isAuthenticated && isAuthenticated !== undefined) {
+      console.log('Not authenticated, redirecting to login with return path');
+      // Store the current path or default to /mini/new
+      const returnPath = conversationId ? `/mini/${conversationId}` : '/mini/new';
+      navigate(`/login?returnTo=${encodeURIComponent(returnPath)}`, { replace: true });
+    }
+  }, [isAuthenticated, navigate, conversationId]);
+
+  if (!isAuthenticated) {
+    return (
+      <div className="flex h-screen items-center justify-center" aria-live="polite" role="status">
+        <Spinner className="text-text-primary" />
+      </div>
+    );
+  }
+
+  // Wait for conversation to be initialized before rendering
+  if (!conversation || !conversation.endpoint) {
+    return (
+      <div className="flex h-screen items-center justify-center" aria-live="polite" role="status">
+        <Spinner className="text-text-primary" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex h-screen w-full flex-col overflow-hidden">
+      <ToolCallsMapProvider conversationId={conversation.conversationId ?? ''}>
+        <ChatMiniView index={index} />
+      </ToolCallsMapProvider>
+    </div>
+  );
+}

@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Blue Navbar with Chat Pane</title>
+
+    <style>
+      :root {
+        --blue: #0d6efd;
+        --nav-height: 60px;
+        --tile-bg: rgba(255, 255, 255, 0.85);
+        --tile-border: rgba(0, 0, 0, 0.08);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: system-ui, sans-serif;
+        color: #222;
+        background: url('https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?q=80&w=1600&auto=format&fit=crop')
+          center/cover no-repeat fixed;
+      }
+      body::before {
+        content: '';
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.25);
+        z-index: 0;
+        pointer-events: none;
+      }
+
+      /* PAGE WRAPPER SHRINK */
+      #page-wrapper {
+        width: 100%;
+        transition:
+          width 0.25s ease,
+          margin-right 0.25s ease,
+          transform 0.25s ease;
+        position: relative;
+        z-index: 1;
+      }
+
+      /* When chat opens → Page shrinks properly */
+      #page-wrapper.chat-open {
+        width: 100% !important;
+        display: inline-block !important;
+        margin-right: 30%;
+        transform: translateX(-0%);
+        position:fixed;
+      }
+
+      /* Remove top extra space when chat is open */
+      #page-wrapper.chat-open .container {
+        margin-top: 20px !important;
+        width: 70%;
+        display: inline-block;
+      }
+
+      /* NAVBAR */
+      .navbar {
+        position: sticky;
+        top: 0;
+        height: var(--nav-height);
+        background: var(--blue);
+        color: #fff;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 20px;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+        border-bottom: 3px dashed rgba(255, 255, 255, 0.7);
+        z-index: 10;
+      }
+
+      .navbar .brand {
+        font-weight: 700;
+      }
+      .navbar a {
+        color: #fff;
+        margin-left: 16px;
+        opacity: 0.9;
+        text-decoration: none;
+      }
+      .navbar a:hover {
+        opacity: 1;
+        text-decoration: underline;
+      }
+
+      /* CONTENT */
+      .container {
+        max-width: 1100px;
+        margin: calc(var(--nav-height) + 24px) auto 40px;
+        padding: 0 20px;
+      }
+
+      /* TILES */
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 20px;
+      }
+      .tile {
+        background: var(--tile-bg);
+        border: 1px solid var(--tile-border);
+        border-radius: 12px;
+        padding: 16px;
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+        backdrop-filter: blur(2px);
+      }
+      .tile h3 {
+        margin: 0 0 8px;
+        font-size: 18px;
+      }
+      .tile p {
+        margin: 0;
+        font-size: 14px;
+        line-height: 1.5;
+        color: #444;
+      }
+      h1.page-title {
+        color: #fff;
+        text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+        margin: 0 0 16px;
+        font-size: 28px;
+      }
+
+      footer {
+        text-align: center;
+        color: #eee;
+        margin: 30px 0;
+      }
+
+      /* LIBRECHAT LAUNCHER */
+      .lc-launcher,
+      #lc-launcher {
+        position: fixed !important;
+        top: 20px !important;
+        right: 20px !important;
+        z-index: 999999 !important;
+      }
+
+      /* FIXED RIGHT PANEL */
+      .lc-widget,
+      .lc-minipopup,
+      #lc-widget,
+      iframe[src*='mini'] {
+        position: fixed !important;
+        top: var(--nav-height) !important;
+        right: 0 !important;
+        bottom: 0 !important;
+        width: 30% !important;
+        height: 90vh !important;
+        max-width: 500px !important;
+        min-width: 320px !important;
+        z-index: 999998 !important;
+        box-shadow: -2px 0 10px rgba(0, 0, 0, 0.3) !important;
+        border-left: 1px solid rgba(0, 0, 0, 0.1) !important;
+      }
+
+      /* FORCE IFRAME INSIDE TO FULL HEIGHT */
+      iframe[src*='mini'],
+      iframe[src*='minipopup'] {
+        height: 100vh !important;
+        min-height: 100vh !important;
+        max-height: 100vh !important;
+      }
+
+      iframe[src*='mini'] html,
+      iframe[src*='mini'] body,
+      iframe[src*='minipopup'] html,
+      iframe[src*='minipopup'] body,
+      iframe[src*='minipopup'] #root {
+        height: 100% !important;
+        overflow: hidden !important;
+      }
+
+      @media (max-width: 480px) {
+        .lc-widget {
+          width: 100% !important;
+        }
+        #page-wrapper.chat-open {
+          margin-right: 0;
+          margin-top: 100;
+          width: 70%;
+          display: inline-block;
+        }
+      }
+    </style>
+  </head>
+
+  <body>
+    <div id="page-wrapper">
+      <header class="navbar">
+        <div class="brand">My Site</div>
+        <nav>
+          <a href="#">Home</a>
+          <a href="#">About</a>
+          <a href="#">Contact</a>
+        </nav>
+      </header>
+      <!-- LIBRECHAT SCRIPTS -->
+      <script>
+        window.process = { env: { NODE_ENV: 'production' } };
+      </script>
+
+      <script src="http://localhost:3081/plugins/librechat-plugin.js"></script>
+
+      <script>
+        LibreChatWidget.init({
+          host: 'http://localhost:3081',
+          miniPath: '/mini',
+        });
+      </script>
+      <main class="container">
+        <h1 class="page-title">Welcome</h1>
+
+        <section class="grid">
+          <div class="tile">
+            <h3>Tile One</h3>
+            <p>Some description.</p>
+          </div>
+          <div class="tile">
+            <h3>Tile Two</h3>
+            <p>Another tile.</p>
+          </div>
+          <div class="tile">
+            <h3>Tile Three</h3>
+            <p>Content here.</p>
+          </div>
+          <div class="tile">
+            <h3>Tile Four</h3>
+            <p>Responsive grid.</p>
+          </div>
+          <div class="tile">
+            <h3>Tile Five</h3>
+            <p>More text.</p>
+          </div>
+          <div class="tile">
+            <h3>Tile Six</h3>
+            <p>Customise as needed.</p>
+          </div>
+        </section>
+      </main>
+
+      <footer>
+        <small>&copy; 2025 Example</small>
+      </footer>
+    </div>
+
+    <script>
+  const wrapper = document.getElementById("page-wrapper");
+
+  function checkWidget() {
+    const widget = document.querySelector("iframe[src*='mini']");
+    if (!widget) {
+      wrapper.classList.remove("chat-open");
+      return;
+    }
+
+    const cs = getComputedStyle(widget);
+    const visible = cs.display !== "none" && widget.offsetWidth > 0 && widget.offsetHeight > 0;
+
+    if (visible) wrapper.classList.add("chat-open");
+    else wrapper.classList.remove("chat-open");
+  }
+
+  // STEP 1 — watch for iframe to be added
+  const widgetObserver = new MutationObserver(() => {
+    const widget = document.querySelector("iframe[src*='mini']");
+    if (widget) {
+      // Stop watching once widget is found
+      widgetObserver.disconnect();
+
+      // STEP 2 — if iframe reloads or resizes
+      widget.addEventListener("load", checkWidget);
+
+      // STEP 3 — check once immediately
+      checkWidget();
+    }
+  });
+
+  widgetObserver.observe(document.body, { childList: true, subtree: true });
+</script>
+  </body>
+</html>

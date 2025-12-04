@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- License: MIT. Made by joypixels: https://github.com/joypixels/emojione -->
+<svg width="800px" height="800px" viewBox="0 0 64 64"
+     xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
+
+  <defs>
+    <!-- Gradient -->
+    <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3BA3F8" />
+      <stop offset="100%" stop-color="#C44BFF" />
+    </linearGradient>
+
+    <!-- Shadow filter (non-color-replacing version) -->
+    <filter id="shadow" x="-40%" y="-40%" width="200%" height="200%">
+      <feDropShadow dx="2" dy="3" stdDeviation="2" flood-opacity="0.35" />
+    </filter>
+  </defs>
+
+  <!-- Apply shadow to all shapes but keep colors -->
+  <g filter="url(#shadow)">
+    <path d="M22.625 2c0 15.834-8.557 30-20.625 30c12.068 0 20.625 14.167 20.625 30
+            c0-15.833 8.557-30 20.625-30c-12.068 0-20.625-14.166-20.625-30"
+          fill="url(#grad1)"/>
+    <path d="M47 32c0 7.918-4.277 15-10.313 15C42.723 47 47 54.084 47 62
+            c0-7.916 4.277-15 10.313-15C51.277 47 47 39.918 47 32z"
+          fill="url(#grad1)"/>
+    <path d="M51.688 2c0 7.917-4.277 15-10.313 15c6.035 0 10.313 7.084 10.313 15
+            c0-7.916 4.277-15 10.313-15c-6.036 0-10.313-7.083-10.313-15"
+          fill="url(#grad1)"/>
+  </g>
+</svg>
