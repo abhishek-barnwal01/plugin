@@ -69,14 +69,14 @@ export default function MiniApp() {
   // Ensure LiteLLM endpoint is used in mini mode if available
   useEffect(() => {
     if (isAuthenticated && endpointsQuery.data) {
-      const customEndpoints = endpointsQuery.data?.custom || [];
-      const liteLLMEndpoint = customEndpoints.find((ep: any) => ep.name === 'LiteLLM');
+      // Check if custom endpoint exists and is configured
+      const customConfig = endpointsQuery.data.custom;
 
-      if (liteLLMEndpoint) {
+      if (customConfig && customConfig.name === 'LiteLLM') {
         const storedSetup = localStorage.getItem('lastConversationSetup');
         const setup = storedSetup ? JSON.parse(storedSetup) : {};
 
-        // If no endpoint is set or it's not LiteLLM, set it
+        // If no endpoint is set or it's not custom, set it to custom (LiteLLM)
         if (!setup.endpoint || setup.endpoint !== 'custom') {
           const newSetup = {
             ...setup,
