@@ -66,6 +66,31 @@ export default function MiniApp() {
     }
   }, [effectiveConversationId]);
 
+  // Ensure LiteLLM endpoint is used in mini mode if available
+  useEffect(() => {
+    if (isAuthenticated && endpointsQuery.data) {
+      const customEndpoints = endpointsQuery.data?.custom || [];
+      const liteLLMEndpoint = customEndpoints.find((ep: any) => ep.name === 'LiteLLM');
+
+      if (liteLLMEndpoint) {
+        const storedSetup = localStorage.getItem('lastConversationSetup');
+        const setup = storedSetup ? JSON.parse(storedSetup) : {};
+
+        // If no endpoint is set or it's not LiteLLM, set it
+        if (!setup.endpoint || setup.endpoint !== 'custom') {
+          const newSetup = {
+            ...setup,
+            endpoint: 'custom',
+            endpointType: 'custom',
+            model: 'gpt-4o'
+          };
+          localStorage.setItem('lastConversationSetup', JSON.stringify(newSetup));
+          console.log('[MiniApp] Set default endpoint to LiteLLM for mini mode');
+        }
+      }
+    }
+  }, [isAuthenticated, endpointsQuery.data]);
+
   // Auto-redirect /mini to /mini/new if no conversationId in URL
   useEffect(() => {
     if (!conversationId) {
