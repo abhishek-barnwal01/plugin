@@ -34,7 +34,17 @@ export default function StartupLayout({ isAuthenticated }: { isAuthenticated?: b
       const urlParams = new URLSearchParams(window.location.search);
       const returnTo = urlParams.get('returnTo');
       const redirectPath = returnTo || '/c/new';
+      console.log('[StartupLayout] Redirecting after auth:', {
+        pathname: location.pathname,
+        windowLocationSearch: window.location.search,
+        returnTo,
+        redirectPath
+      });
       navigate(redirectPath, { replace: true });
+    } else if (isAuthenticated) {
+      console.log('[StartupLayout] Auth detected but not on login page:', {
+        pathname: location.pathname
+      });
     }
     if (data) {
       setStartupConfig(data);

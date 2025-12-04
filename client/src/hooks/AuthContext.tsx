@@ -63,6 +63,11 @@ const AuthContextProvider = ({
         // Clear the stored redirect
         logoutRedirectRef.current = undefined;
 
+        console.log('[AuthContext] setUserContext executing:', {
+          isAuthenticated,
+          finalRedirect
+        });
+
         if (finalRedirect == null) {
           return;
         }
@@ -70,6 +75,7 @@ const AuthContextProvider = ({
         if (finalRedirect.startsWith('http://') || finalRedirect.startsWith('https://')) {
           window.location.href = finalRedirect;
         } else {
+          console.log('[AuthContext] Navigating to:', finalRedirect);
           navigate(finalRedirect, { replace: true });
         }
       }, 50),
@@ -91,6 +97,12 @@ const AuthContextProvider = ({
       const urlParams = new URLSearchParams(window.location.search);
       const returnTo = urlParams.get('returnTo');
       const redirectPath = returnTo || '/c/new';
+
+      console.log('[AuthContext] Login success, redirect info:', {
+        windowLocationSearch: window.location.search,
+        returnTo,
+        redirectPath
+      });
 
       setUserContext({ token, isAuthenticated: true, user, redirect: redirectPath });
     },
