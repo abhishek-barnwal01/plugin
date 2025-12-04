@@ -105,7 +105,7 @@ export const router = createBrowserRouter(
               element: <Navigate to="/c/new" replace={true} />,
             },
             {
-              path: '/mini/:conversationId?',
+              path: 'mini/:conversationId?',
               element: <MiniApp />,
             },
             {
