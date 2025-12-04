@@ -195,6 +195,12 @@ const useNewConvo = (index = 0) => {
         // Check if we're in mini mode
         const isMiniMode = location.pathname.startsWith('/mini');
         const basePath = isMiniMode ? '/mini' : '/c';
+        console.log('[useNewConvo] Navigation decision:', {
+          pathname: location.pathname,
+          isMiniMode,
+          basePath,
+          conversationId: conversation.conversationId
+        });
 
         if (conversation.conversationId === Constants.NEW_CONVO && !modelsData) {
           const appTitle = localStorage.getItem(LocalStorageKeys.APP_TITLE) ?? '';
@@ -202,11 +208,13 @@ const useNewConvo = (index = 0) => {
             document.title = appTitle;
           }
           const path = `${basePath}/${Constants.NEW_CONVO}${getParams()}`;
+          console.log('[useNewConvo] Navigating to:', path);
           navigate(path, { state: { focusChat: true } });
           return;
         }
 
         const path = `${basePath}/${conversation.conversationId}${getParams()}`;
+        console.log('[useNewConvo] Navigating to (with conversationId):', path);
         navigate(path, {
           replace: true,
           state: disableFocus ? {} : { focusChat: true },
