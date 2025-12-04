@@ -30,7 +30,11 @@ export default function StartupLayout({ isAuthenticated }: { isAuthenticated?: b
 
   useEffect(() => {
     if (isAuthenticated) {
-      navigate('/c/new', { replace: true });
+      // Check for returnTo parameter to support mini popup routing
+      const urlParams = new URLSearchParams(window.location.search);
+      const returnTo = urlParams.get('returnTo');
+      const redirectPath = returnTo || '/c/new';
+      navigate(redirectPath, { replace: true });
     }
     if (data) {
       setStartupConfig(data);

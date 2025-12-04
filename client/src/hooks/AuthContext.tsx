@@ -86,7 +86,13 @@ const AuthContextProvider = ({
         return;
       }
       setError(undefined);
-      setUserContext({ token, isAuthenticated: true, user, redirect: '/c/new' });
+
+      // Check for returnTo query parameter to support mini popup routing
+      const urlParams = new URLSearchParams(window.location.search);
+      const returnTo = urlParams.get('returnTo');
+      const redirectPath = returnTo || '/c/new';
+
+      setUserContext({ token, isAuthenticated: true, user, redirect: redirectPath });
     },
     onError: (error: TResError | unknown) => {
       const resError = error as TResError;

@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { useGetModelsQuery } from 'librechat-data-provider/react-query';
 import {
   Constants,
@@ -37,6 +37,7 @@ import store from '~/store';
 const useNewConvo = (index = 0) => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const location = useLocation();
   const { data: startupConfig } = useGetStartupConfig();
   const applyModelSpecEffects = useApplyModelSpecEffects();
   const clearAllConversations = store.useClearConvoState();
@@ -191,23 +192,35 @@ const useNewConvo = (index = 0) => {
         const searchParamsString = searchParams?.toString();
         const getParams = () => (searchParamsString ? `?${searchParamsString}` : '');
 
+        // Check if we're in mini mode
+        const isMiniMode = location.pathname.startsWith('/mini');
+        const basePath = isMiniMode ? '/mini' : '/c';
+        console.log('[useNewConvo] Navigation decision:', {
+          pathname: location.pathname,
+          isMiniMode,
+          basePath,
+          conversationId: conversation.conversationId
+        });
+
         if (conversation.conversationId === Constants.NEW_CONVO && !modelsData) {
           const appTitle = localStorage.getItem(LocalStorageKeys.APP_TITLE) ?? '';
           if (appTitle) {
             document.title = appTitle;
           }
-          const path = `/c/${Constants.NEW_CONVO}${getParams()}`;
+          const path = `${basePath}/${Constants.NEW_CONVO}${getParams()}`;
+          console.log('[useNewConvo] Navigating to:', path);
           navigate(path, { state: { focusChat: true } });
           return;
         }
 
-        const path = `/c/${conversation.conversationId}${getParams()}`;
+        const path = `${basePath}/${conversation.conversationId}${getParams()}`;
+        console.log('[useNewConvo] Navigating to (with conversationId):', path);
         navigate(path, {
           replace: true,
           state: disableFocus ? {} : { focusChat: true },
         });
       },
-    [endpointsConfig, defaultPreset, assistantsListMap, modelsQuery.data],
+    [endpointsConfig, defaultPreset, assistantsListMap, modelsQuery.data, location],
   );
 
   const newConversation = useCallback(

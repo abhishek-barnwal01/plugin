@@ -29,8 +29,9 @@ export default function MiniApp() {
   useAppStartup({ startupConfig, user });
 
   const index = 0;
-  const { conversationId = Constants.NEW_CONVO } = useParams(); // Default to NEW_CONVO
-  useIdChangeEffect(conversationId);
+  const { conversationId } = useParams();
+  const effectiveConversationId = conversationId || Constants.NEW_CONVO;
+  useIdChangeEffect(effectiveConversationId);
   const { hasSetConversation, conversation } = store.useCreateConversationAtom(index);
   const { newConversation } = useNewConvo();
 
@@ -38,32 +39,32 @@ export default function MiniApp() {
     enabled: isAuthenticated,
     refetchOnMount: 'always',
   });
-  const initialConvoQuery = useGetConvoIdQuery(conversationId, {
+  const initialConvoQuery = useGetConvoIdQuery(effectiveConversationId, {
     enabled:
-      isAuthenticated && conversationId !== Constants.NEW_CONVO && !hasSetConversation.current,
+      isAuthenticated && effectiveConversationId !== Constants.NEW_CONVO && !hasSetConversation.current,
   });
   const endpointsQuery = useGetEndpointsQuery({ enabled: isAuthenticated });
   const assistantListMap = useAssistantListMap();
 
   const isTemporaryChat = conversation && conversation.expiredAt ? true : false;
 
-  console.log('miniapploaded', { conversationId, isAuthenticated, conversation });
+  console.log('miniapploaded', { conversationId, effectiveConversationId, isAuthenticated, conversation });
 
-  // Auto-redirect /mini to /mini/new if no conversationId
+  // Auto-redirect /mini to /mini/new if no conversationId in URL
   useEffect(() => {
-    if (!conversationId || conversationId === '') {
-      console.log('No conversationId, redirecting to /mini/new');
+    if (!conversationId) {
+      console.log('No conversationId in URL, redirecting to /mini/new');
       navigate('/mini/new', { replace: true });
     }
   }, [conversationId, navigate]);
 
   useEffect(() => {
-    if (conversationId !== Constants.NEW_CONVO && !isTemporaryChat) {
+    if (effectiveConversationId !== Constants.NEW_CONVO && !isTemporaryChat) {
       setIsTemporary(false);
     } else if (isTemporaryChat) {
       setIsTemporary(isTemporaryChat);
     }
-  }, [conversationId, isTemporaryChat, setIsTemporary]);
+  }, [effectiveConversationId, isTemporaryChat, setIsTemporary]);
 
   /** This effect is mainly for the first conversation state change on first load of the page.
    *  Adjusting this may have unintended consequences on the conversation state.
@@ -76,7 +77,7 @@ export default function MiniApp() {
       return;
     }
 
-    if (conversationId === Constants.NEW_CONVO && endpointsQuery.data && modelsQuery.data) {
+    if (effectiveConversationId === Constants.NEW_CONVO && endpointsQuery.data && modelsQuery.data) {
       const result = getDefaultModelSpec(startupConfig);
       const spec = result?.default ?? result?.last;
       logger.log('conversation', 'ChatRoute, new convo effect', conversation);
@@ -98,7 +99,7 @@ export default function MiniApp() {
       });
       hasSetConversation.current = true;
     } else if (
-      conversationId === Constants.NEW_CONVO &&
+      effectiveConversationId === Constants.NEW_CONVO &&
       assistantListMap[EModelEndpoint.assistants] &&
       assistantListMap[EModelEndpoint.azureAssistants]
     ) {
@@ -148,10 +149,10 @@ export default function MiniApp() {
     if (!isAuthenticated && isAuthenticated !== undefined) {
       console.log('Not authenticated, redirecting to login with return path');
       // Store the current path or default to /mini/new
-      const returnPath = conversationId ? `/mini/${conversationId}` : '/mini/new';
+      const returnPath = effectiveConversationId ? `/mini/${effectiveConversationId}` : '/mini/new';
       navigate(`/login?returnTo=${encodeURIComponent(returnPath)}`, { replace: true });
     }
-  }, [isAuthenticated, navigate, conversationId]);
+  }, [isAuthenticated, navigate, effectiveConversationId]);
 
   if (!isAuthenticated) {
     return (
